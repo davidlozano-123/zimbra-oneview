@@ -132,3 +132,14 @@ td select { padding: 4px 6px; font-size: 13px; }
   .split, .grid-form { grid-template-columns: 1fr; }
   .topbar, .tabs, .container { padding-left: 16px; padding-right: 16px; }
 }
+
+/* ===== Módulo de Reportes ===== */
+.section-head {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
+}
+.section-head h1 { margin: 0; }
+.subhead { font-size: 14px; font-weight: 600; color: var(--muted); margin: 8px 0 10px; }
+.kpis-compact { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); margin-top: 8px; }
+.kpis-compact .kpi { padding: 10px 12px; background: #fafbfc; }
+.kpis-compact .kpi strong { font-size: 20px; }
+.card-head select { padding: 5px 8px; font-size: 13px; }

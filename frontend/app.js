@@ -22,6 +22,9 @@ const badge = (estado) =>
 
 const fmtFecha = (f) => (f ? new Date(f).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" }) : "—");
 const fmtNum = (n) => Number(n ?? 0).toLocaleString("es-CO");
+const fmtDinero = (n) => "$" + Number(n ?? 0).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtSoloFecha = (f) => (f ? new Date(String(f).length === 10 ? f + "T00:00:00" : f).toLocaleDateString("es-CO", { dateStyle: "medium" }) : "—");
+const MODELOS = { pagar_por_usar: "Pagar por usar", lugares_ilimitados: "Lugares ilimitados" };
 
 // Llamada a la API: devuelve JSON o lanza Error con el mensaje legible del backend.
 async function api(ruta, opciones = {}) {
@@ -83,6 +86,7 @@ const cargadores = {
   prospectos: cargarProspectos,
   alertas: () => {},
   cartera: cargarVendedoresTabla,
+  reportes: cargarReportes,
 };
 
 function mostrarVista(nombre) {
@@ -279,6 +283,131 @@ $("form-cartera").addEventListener("submit", async (e) => {
     }
   });
 });
+
+/* ---------- Reportes ---------- */
+
+function inicializarFiltrosMensual() {
+  const hoy = new Date();
+  if (!$("rep-anio").value) $("rep-anio").value = hoy.getFullYear();
+  if (!$("rep-mes").dataset.init) {
+    $("rep-mes").value = String(hoy.getMonth() + 1);
+    $("rep-mes").dataset.init = "1";
+  }
+}
+
+async function cargarReporteMensual() {
+  inicializarFiltrosMensual();
+  const anio = Number($("rep-anio").value);
+  const mes = Number($("rep-mes").value);
+  $("msg-reporte-mensual").hidden = true;
+
+  try {
+    const data = await api(`/reportes/mensual?anio=${anio}&mes=${mes}`);
+    const r = data.resumen || {};
+    const kpis = [
+      ["Prospectos nuevos", fmtNum(r.prospectos_nuevos)],
+      ["Pruebas iniciadas", fmtNum(r.pruebas_iniciadas)],
+      ["Eventos web", fmtNum(r.eventos_web)],
+      ["Alertas", fmtNum(r.alertas)],
+      ["Ventas", fmtNum(r.ventas)],
+      ["Monto total", fmtDinero(r.monto_total)],
+    ];
+    $("kpis-mensual").innerHTML = kpis
+      .map(([t, v]) => `<div class="kpi"><span>${t}</span><strong>${esc(v)}</strong></div>`)
+      .join("");
+
+    const vends = data.ventas_por_vendedor || [];
+    $("tbl-mensual-vendedores").innerHTML = vends.length
+      ? vends.map((v) => `<tr>
+          <td>${esc(v.vendedor)}</td>
+          <td>${fmtNum(v.ventas)}</td>
+          <td>${esc(fmtDinero(v.monto))}</td></tr>`).join("")
+      : `<tr><td class="empty" colspan="3">Sin ventas en este mes.</td></tr>`;
+
+    const mods = data.ventas_por_modelo || [];
+    $("tbl-mensual-modelos").innerHTML = mods.length
+      ? mods.map((m) => `<tr>
+          <td>${esc(MODELOS[m.modelo_licencia] || m.modelo_licencia)}</td>
+          <td>${fmtNum(m.ventas)}</td>
+          <td>${fmtNum(m.usuarios)}</td>
+          <td>${esc(fmtDinero(m.monto))}</td></tr>`).join("")
+      : `<tr><td class="empty" colspan="4">Sin ventas en este mes.</td></tr>`;
+  } catch (err) {
+    mostrarMensaje("msg-reporte-mensual", err.message, false);
+  }
+}
+
+async function cargarTrafico() {
+  const dias = Number($("rep-dias").value);
+  const filas = await api(`/reportes/trafico-diario?dias=${dias}`);
+  $("tbl-rep-trafico").innerHTML = filas.length
+    ? filas.map((f) => `<tr>
+        <td>${esc(fmtSoloFecha(f.dia))}</td>
+        <td>${fmtNum(f.eventos)}</td>
+        <td>${fmtNum(f.visitantes_unicos)}</td>
+        <td>${fmtNum(f.descargas)}</td></tr>`).join("")
+    : `<tr><td class="empty" colspan="4">Sin tráfico registrado en este periodo.</td></tr>`;
+}
+
+async function cargarPaginasTop() {
+  const limite = Number($("rep-limite-paginas").value);
+  const filas = await api(`/reportes/paginas-top?limite=${limite}`);
+  $("tbl-rep-paginas").innerHTML = filas.length
+    ? filas.map((f) => `<tr>
+        <td><code>${esc(f.pagina)}</code></td>
+        <td>${fmtNum(f.visitas)}</td>
+        <td>${fmtNum(f.visitantes)}</td></tr>`).join("")
+    : `<tr><td class="empty" colspan="3">Sin páginas registradas.</td></tr>`;
+}
+
+async function cargarReportes() {
+  const [, , , vendedores, pruebas, campanas] = await Promise.all([
+    cargarReporteMensual(),
+    cargarTrafico(),
+    cargarPaginasTop(),
+    api("/reportes/ventas-por-vendedor"),
+    api("/reportes/pruebas-por-vencer"),
+    api("/reportes/campanas"),
+  ]);
+
+  $("tbl-rep-vendedores").innerHTML = vendedores.length
+    ? vendedores.map((v) => `<tr>
+        <td>${esc(v.vendedor)}</td>
+        <td>${fmtNum(v.ventas)}</td>
+        <td>${esc(fmtDinero(v.monto_total))}</td></tr>`).join("")
+    : `<tr><td class="empty" colspan="3">Sin vendedores registrados.</td></tr>`;
+
+  $("tbl-rep-pruebas").innerHTML = pruebas.length
+    ? pruebas.map((p) => `<tr>
+        <td>${esc(p.nombre)}<br><small>${esc(p.correo)}</small></td>
+        <td>${esc(p.vendedor || "Sin asignar")}</td>
+        <td>${esc(fmtSoloFecha(p.fecha_vencimiento))}</td>
+        <td><span class="badge ${p.dias_restantes <= 2 ? "badge-perdido" : "badge-en_negociacion"}">${esc(p.dias_restantes)} d</span></td></tr>`).join("")
+    : `<tr><td class="empty" colspan="4">No hay pruebas próximas a vencer.</td></tr>`;
+
+  $("tbl-rep-campanas").innerHTML = campanas.length
+    ? campanas.map((c) => {
+        const env = Number(c.enviados || 0);
+        const conv = Number(c.conversiones || 0);
+        const pct = env > 0 ? ((conv * 100) / env).toFixed(1) + " %" : "—";
+        return `<tr>
+          <td>${esc(c.nombre)}</td>
+          <td>${fmtNum(c.enviados)}</td>
+          <td>${fmtNum(c.aperturas)}</td>
+          <td>${fmtNum(c.clics)}</td>
+          <td>${fmtNum(c.conversiones)}</td>
+          <td>${esc(pct)}</td></tr>`;
+      }).join("")
+    : `<tr><td class="empty" colspan="6">Sin campañas registradas.</td></tr>`;
+}
+
+$("form-reporte-mensual").addEventListener("submit", (e) => {
+  e.preventDefault();
+  cargarReporteMensual().catch((err) => toast(err.message));
+});
+$("rep-dias").addEventListener("change", () => cargarTrafico().catch((err) => toast(err.message)));
+$("rep-limite-paginas").addEventListener("change", () => cargarPaginasTop().catch((err) => toast(err.message)));
+$("btn-refrescar-reportes").addEventListener("click", () => cargarReportes().catch((err) => toast(err.message)));
 
 /* ---------- Arranque ---------- */
 

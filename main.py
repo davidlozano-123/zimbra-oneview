@@ -80,6 +80,10 @@ def _error_bd(e: mysql.connector.Error) -> HTTPException:
         return HTTPException(400, "Referencia inválida (llave foránea)")
     if e.errno == 3819:                      # violación de CHECK
         return HTTPException(400, "Valor fuera de las reglas de la tabla")
+    if e.errno == 1213:                      # deadlock: la transacción fue la víctima
+        return HTTPException(409, "Deadlock detectado: reintenta la operación")
+    if e.errno == 1205:                      # tiempo de espera de bloqueo agotado
+        return HTTPException(503, "Recurso bloqueado por otra transacción: reintenta")
     if e.errno == 1644:                      # SIGNAL de un trigger o procedimiento (regla de negocio)
         return HTTPException(422, e.msg)
     return HTTPException(500, f"Error de base de datos: {e.msg}")
@@ -260,7 +264,7 @@ def cerrar_venta(v: VentaIn):
             )
             for _ in cur.stored_results():
                 pass
-            resultado = args[5]
+            resultado = list(args.values())[5] if isinstance(args, dict) else args[5]
     except mysql.connector.Error as e:
         raise _error_bd(e)
 
@@ -280,7 +284,7 @@ def reasignar_cartera(r: ReasignacionIn):
             args = cur.callproc("sp_reasignar_cartera", [r.id_origen, r.id_destino, ""])
             for _ in cur.stored_results():
                 pass
-            resultado = args[2]
+            resultado = list(args.values())[2] if isinstance(args, dict) else args[2]
     except mysql.connector.Error as e:
         raise _error_bd(e)
 
@@ -308,6 +312,73 @@ def reporte_calificados():
         return db.consultar("SELECT * FROM v_prospectos_calificados")
     except mysql.connector.Error as e:
         raise _error_bd(e)
+
+
+
+def _reporte(sql: str, params=None):
+    try:
+        return db.consultar(sql, params)
+    except mysql.connector.Error as e:
+        raise _error_bd(e)
+
+
+def _filas_a_dicts(res):
+    """Convierte las filas de stored_results() a diccionarios (compatible con cursor dict o tupla)."""
+    filas = res.fetchall()
+    if not filas:
+        return []
+    if isinstance(filas[0], dict):
+        return filas
+    cols = res.column_names
+    return [dict(zip(cols, f)) for f in filas]
+
+
+@app.get("/reportes/trafico-diario")
+def reporte_trafico(dias: int = Query(30, ge=1, le=365)):
+    return _reporte(
+        f"SELECT * FROM v_trafico_diario WHERE dia >= CURRENT_DATE - INTERVAL {int(dias)} DAY ORDER BY dia DESC"
+    )
+
+
+@app.get("/reportes/paginas-top")
+def reporte_paginas(limite: int = Query(10, ge=1, le=100)):
+    return _reporte(f"SELECT * FROM v_paginas_top LIMIT {int(limite)}")
+
+
+@app.get("/reportes/pruebas-por-vencer")
+def reporte_pruebas():
+    return _reporte("SELECT * FROM v_pruebas_por_vencer ORDER BY dias_restantes")
+
+
+@app.get("/reportes/campanas")
+def reporte_campanas():
+    return _reporte("SELECT * FROM v_rendimiento_campanas ORDER BY enviados DESC")
+
+
+@app.get("/reportes/ventas-por-vendedor")
+def reporte_ventas_vendedor():
+    return _reporte("SELECT * FROM v_ventas_por_vendedor ORDER BY monto_total DESC")
+
+
+@app.get("/reportes/mensual")
+def reporte_mensual(anio: int = Query(...), mes: int = Query(...)):
+    """Ejecuta sp_reporte_mensual(anio, mes) y devuelve sus 3 conjuntos de resultados."""
+    try:
+        with db.transaccion() as (_, cur):
+            cur.callproc("sp_reporte_mensual", [anio, mes])
+            bloques = [_filas_a_dicts(res) for res in cur.stored_results()]
+    except mysql.connector.Error as e:
+        raise _error_bd(e)
+
+    resumen = bloques[0][0] if len(bloques) > 0 and bloques[0] else {
+        "anio": anio, "mes": mes, "prospectos_nuevos": 0, "pruebas_iniciadas": 0,
+        "eventos_web": 0, "alertas": 0, "ventas": 0, "monto_total": 0,
+    }
+    return {
+        "resumen": resumen,
+        "ventas_por_vendedor": bloques[1] if len(bloques) > 1 else [],
+        "ventas_por_modelo": bloques[2] if len(bloques) > 2 else [],
+    }
 
 
 # ---------------------------------------------------------------------

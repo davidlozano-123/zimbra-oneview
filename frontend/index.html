@@ -28,6 +28,7 @@
     <button class="tab" data-view="venta">Cerrar venta</button>
     <button class="tab" data-view="alertas">Alertas</button>
     <button class="tab" data-view="cartera">Cartera</button>
+    <button class="tab" data-view="reportes">Reportes</button>
   </nav>
 
   <main class="container">
@@ -187,6 +188,141 @@
             <table>
               <thead><tr><th>Nombre</th><th>Rol</th><th>Activos</th></tr></thead>
               <tbody id="tbl-vendedores"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- REPORTES -->
+    <section id="view-reportes" class="view">
+      <div class="section-head">
+        <h1>Reportes</h1>
+        <button class="btn btn-ghost" id="btn-refrescar-reportes">Actualizar todo</button>
+      </div>
+
+      <!-- Reporte mensual (sp_reporte_mensual) -->
+      <div class="card">
+        <div class="card-head">
+          <h2>Reporte mensual gerencial</h2>
+        </div>
+        <form class="filters" id="form-reporte-mensual">
+          <label>Año
+            <input type="number" id="rep-anio" min="2000" max="2100" required>
+          </label>
+          <label>Mes
+            <select id="rep-mes">
+              <option value="1">Enero</option>
+              <option value="2">Febrero</option>
+              <option value="3">Marzo</option>
+              <option value="4">Abril</option>
+              <option value="5">Mayo</option>
+              <option value="6">Junio</option>
+              <option value="7">Julio</option>
+              <option value="8">Agosto</option>
+              <option value="9">Septiembre</option>
+              <option value="10">Octubre</option>
+              <option value="11">Noviembre</option>
+              <option value="12">Diciembre</option>
+            </select>
+          </label>
+          <button class="btn" type="submit">Consultar mes</button>
+        </form>
+        <div id="msg-reporte-mensual" class="msg" hidden></div>
+        <div class="kpis kpis-compact" id="kpis-mensual"></div>
+        <div class="split">
+          <div>
+            <h3 class="subhead">Ventas por vendedor (mes)</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Vendedor</th><th>Ventas</th><th>Monto (USD)</th></tr></thead>
+                <tbody id="tbl-mensual-vendedores"></tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h3 class="subhead">Ventas por modelo de licencia (mes)</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Modelo</th><th>Ventas</th><th>Usuarios</th><th>Monto (USD)</th></tr></thead>
+                <tbody id="tbl-mensual-modelos"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ventas por vendedor (histórico) + Pruebas por vencer -->
+      <div class="split">
+        <div class="card">
+          <div class="card-head"><h2>Ventas por vendedor (histórico)</h2></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Vendedor</th><th>Ventas</th><th>Monto total (USD)</th></tr></thead>
+              <tbody id="tbl-rep-vendedores"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>Pruebas por vencer (próximos 7 días)</h2></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Prospecto</th><th>Vendedor</th><th>Vence</th><th>Días</th></tr></thead>
+              <tbody id="tbl-rep-pruebas"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rendimiento de campañas -->
+      <div class="card">
+        <div class="card-head"><h2>Rendimiento de campañas de correo</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Campaña</th><th>Enviados</th><th>Aperturas</th><th>Clics</th><th>Conversiones</th><th>Tasa conv.</th></tr>
+            </thead>
+            <tbody id="tbl-rep-campanas"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tráfico diario + Páginas más visitadas -->
+      <div class="split">
+        <div class="card">
+          <div class="card-head">
+            <h2>Tráfico web diario</h2>
+            <select id="rep-dias" aria-label="Rango de días">
+              <option value="7">Últimos 7 días</option>
+              <option value="30" selected>Últimos 30 días</option>
+              <option value="90">Últimos 90 días</option>
+              <option value="365">Último año</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Día</th><th>Eventos</th><th>Visitantes únicos</th><th>Descargas</th></tr></thead>
+              <tbody id="tbl-rep-trafico"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Páginas más visitadas</h2>
+            <select id="rep-limite-paginas" aria-label="Límite de páginas">
+              <option value="5">Top 5</option>
+              <option value="10" selected>Top 10</option>
+              <option value="20">Top 20</option>
+              <option value="50">Top 50</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Página</th><th>Visitas</th><th>Visitantes únicos</th></tr></thead>
+              <tbody id="tbl-rep-paginas"></tbody>
             </table>
           </div>
         </div>
